@@ -3,6 +3,10 @@
 The WalletHealthExecutorAgent analyzes a Solana wallet’s balances, token holdings, and recent transactions using Helius and Solscan APIs.
 This guide explains how to integrate and run it inside the ROMA framework.
 
+
+<img width="839" height="210" alt="image" src="https://github.com/user-attachments/assets/87c48ff8-1d1f-449e-bd04-2bcf8acfd623" />
+
+
 ---
 
 ## 📖 Table of Contents
@@ -28,7 +32,7 @@ LOG_LEVEL=INFO
 
 ```
 
-## 📌 Step 2. Add the Adapter
+## 📌 Step 2. Add the Adapter Class
 
 Edit the file:
 
@@ -178,6 +182,9 @@ executor_adapter_names:
   SEARCH: "WalletHealthExecutor"
 
 ```
+
+<img width="671" height="758" alt="image" src="https://github.com/user-attachments/assets/09acaad1-c261-48d4-bfef-256ecc686860" />
+
 
 
 ## 📌 Step 6. Compose Docker
