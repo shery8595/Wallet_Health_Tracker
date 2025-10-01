@@ -4,7 +4,8 @@ The WalletHealthExecutorAgent analyzes a Solana wallet’s balances, token holdi
 This guide explains how to integrate and run it inside the ROMA framework.
 
 
-<img width="839" height="210" alt="image" src="https://github.com/user-attachments/assets/87c48ff8-1d1f-449e-bd04-2bcf8acfd623" />
+<img width="894" height="265" alt="image" src="https://github.com/user-attachments/assets/7c8f6766-2773-4161-ba96-f91c90da53d8" />
+
 
 
 ---
