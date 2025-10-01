@@ -41,6 +41,11 @@ ROMA/src/sentientresearchagent/hierarchical_agent_framework/agents/adapters.py
 
 and add your custom class:
 ```
+import os
+import requests
+from loguru import logger
+from ..base import LlmApiAdapter  # adjust if needed
+
 class WalletHealthAdapter(LlmApiAdapter):
     """Custom adapter that fetches wallet balances and recent txs from Helius + Solscan."""
 
@@ -65,18 +70,35 @@ class WalletHealthAdapter(LlmApiAdapter):
                 {"encoding": "jsonParsed"}
             ]
         }
-        helius_data = requests.post(helius_url, json=helius_payload).json()
+
+        helius_data = {}
+        try:
+            resp = requests.post(helius_url, json=helius_payload, timeout=15)
+            resp.raise_for_status()
+            helius_data = resp.json()
+        except Exception as e:
+            logger.error(f"[Helius] Error fetching balances for {wallet}: {e}")
+            logger.debug(f"Helius raw response: {resp.text if 'resp' in locals() else 'No response'}")
 
         # --- Solscan account info ---
         solscan_url = f"https://pro-api.solscan.io/v1.0/account/{wallet}"
         headers = {"token": self.solscan_api_key}
-        solscan_data = requests.get(solscan_url, headers=headers).json()
+
+        solscan_data = {}
+        try:
+            resp = requests.get(solscan_url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            solscan_data = resp.json()
+        except Exception as e:
+            logger.error(f"[Solscan] Error fetching account {wallet}: {e}")
+            logger.debug(f"Solscan raw response: {resp.text if 'resp' in locals() else 'No response'}")
 
         return {
             "wallet": wallet,
             "helius_balances": helius_data,
             "solscan_account": solscan_data
         }
+
 
 ```
 
