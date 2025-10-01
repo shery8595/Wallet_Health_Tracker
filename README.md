@@ -1,66 +1,88 @@
-🩺 WalletHealthExecutorAgent – ROMA Integration Guide
+# 🩺 WalletHealthExecutorAgent – ROMA Integration Guide
 
 The WalletHealthExecutorAgent analyzes a Solana wallet’s balances, token holdings, and recent transactions using Helius and Solscan APIs.
 This guide explains how to integrate and run it inside the ROMA framework.
 
-📖 Table of Contents
+---
 
-Step 1. Configure Environment
+## 📖 Table of Contents
+1. [Step 1. Configure Environment](#-step-1-configure-environment)  
+2. [Step 2. Add the Adapter](#-step-2-add-the-adapter)  
+3. [Step 3. Register the Agent](#-step-3-register-the-agent)
+4. [Step 4. Add Executor Prompt](#-step-4-Add-Executor-Prompt)
+5. [Step 5. Update Deep Research Agent Profiles](#-step-5-update-deep-research-agent-profiles)
+6. [Step 6. Compose Docker](#-step-6-Compose-Docker)
+7. [Step 7. Notes](#-step-7-Notes)  
 
-Step 2. Add the Adapter
+---
 
-Step 3. Register the Agent
+## 📌 Step 1. Configure Environment
 
-Step 4. Add Executor Prompt
+Add the following to your `.env` file:
 
-Step 5. Update Deep Research Agent Profiles
-
-Step 6. Compose Docker
-
-Step 7. Notes
-
-📌 Step 1. Configure Environment
-
-Add the following to your .env file:
-
+```env
 HELIUS_API_KEY=your_helius_api_key_here
 SOLSCAN_API_KEY=your_solscan_api_key_here
 RPC_URL=https://api.mainnet-beta.solana.com
 LOG_LEVEL=INFO
 
-📌 Step 2. Add the Adapter
+```
+
+## 📌 Step 2. Add the Adapter
 
 Edit the file:
+
 ROMA/src/sentientresearchagent/hierarchical_agent_framework/agents/adapters.py
 
 and add your custom class:
+```
+class WalletHealthAdapter(LlmApiAdapter):
+    """Custom adapter that fetches wallet balances and recent txs from Helius + Solscan."""
 
-class WalletHealthAdapter:
-    """
-    Adapter that analyzes a wallet’s balances, token holdings, 
-    and recent transactions using Helius + Solscan APIs.
-    """
+    def __init__(self, agno_agent_instance=None, agent_name="WalletHealthAdapter"):
+        super().__init__(agno_agent_instance, agent_name)
+        self.helius_api_key = os.getenv("HELIUS_API_KEY")
+        self.solscan_api_key = os.getenv("SOLSCAN_API_KEY")
 
-    def __init__(self, wallet_address: str, helius_api_key=None, solscan_api_key=None):
-        self.wallet_address = wallet_address
-        self.helius_api_key = helius_api_key or os.getenv("HELIUS_API_KEY")
-        self.solscan_api_key = solscan_api_key or os.getenv("SOLSCAN_API_KEY")
+    async def process(self, node, agent_task_input, trace_manager):
+        wallet = agent_task_input.current_goal.strip()
+        logger.info(f"🔍 WalletHealthAdapter: Checking wallet {wallet}")
 
-    def run(self):
-        # Example placeholder – expand with actual API logic
+        # --- Helius balances ---
+        helius_url = f"https://mainnet.helius-rpc.com/?api-key={self.helius_api_key}"
+        helius_payload = {
+            "jsonrpc": "2.0",
+            "id": "test",
+            "method": "getTokenAccountsByOwner",
+            "params": [
+                wallet,
+                {"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
+                {"encoding": "jsonParsed"}
+            ]
+        }
+        helius_data = requests.post(helius_url, json=helius_payload).json()
+
+        # --- Solscan account info ---
+        solscan_url = f"https://pro-api.solscan.io/v1.0/account/{wallet}"
+        headers = {"token": self.solscan_api_key}
+        solscan_data = requests.get(solscan_url, headers=headers).json()
+
         return {
-            "wallet": self.wallet_address,
-            "status": "healthy",
-            "balances": {"SOL": "2.34"},
-            "recent_activity": "3 swaps in last 24h"
+            "wallet": wallet,
+            "helius_balances": helius_data,
+            "solscan_account": solscan_data
         }
 
-📌 Step 3. Register the Agent
+```
 
-In
+## 📌 Step 3. Register the Agent
+
+Create or edit:
 ROMA/src/sentientresearchagent/hierarchical_agent_framework/agent_configs/agents.yaml,
-add:
 
+Add:
+
+```
 - name: "WalletHealthExecutor"
   type: "executor"
   adapter_class: "sentientresearchagent.hierarchical_agent_framework.agents.adapters.WalletHealthAdapter"
@@ -80,38 +102,70 @@ add:
 
   enabled: true
 
-📌 Step 4. Add Executor Prompt
+```
 
-Create or edit:
-ROMA/src/sentientresearchagent/hierarchical_agent_framework/prompts/executor_prompts.py
+## 📌 Step 4. Add Executor Prompt
+
+In ROMA/src/sentientresearchagent/hierarchical_agent_framework/prompts/executor_prompts.py,
 
 Add:
 
-WALLET_HEALTH_EXECUTOR_SYSTEM_MESSAGE = f"""You are a Solana wallet health analyzer.
+```
+WALLET_HEALTH_EXECUTOR_SYSTEM_MESSAGE = f"""You are an expert blockchain analyst specialized in wallet activity, on-chain data interpretation, and risk assessment. 
+Your task is to analyze the "health" of a wallet by considering its activity, transaction history, token holdings, and behavioral signals.
 
 ### Objectives:
-1. Fetch balances, token holdings, and transactions for the target wallet.
-2. Summarize the wallet’s health in plain English.
-3. Highlight:
-   - Current SOL balance
-   - Top token holdings
-   - Recent swap or transfer activity
-   - Risk level if wallet is inactive or draining
+
+1. Evaluate a wallet's health based on:
+   - Activity level (frequency of transactions, recency of last activity)
+   - Token diversity and balance stability
+   - Risk indicators (suspicious inflows/outflows, low-liquidity tokens, potential scams)
+   - Engagement with reputable vs. shady contracts
+   - Wallet age and longevity
+
+2. Provide a structured response that includes:
+   2.1. Wallet address (input)
+   2.2. Summary health score (e.g., Healthy / Moderate Risk / High Risk)
+   2.3. Key positive indicators
+   2.4. Key risk indicators
+   2.5. Notable token holdings and liquidity health
+   2.6. Recommendations (e.g., diversify tokens, reduce exposure, monitor whale inflows)
+
+### Rules:
+
+1. Be precise, data-driven, and objective. Do not speculate without evidence from on-chain behavior.
+2. Avoid technical jargon that a non-expert cannot understand—explain terms simply where needed.
+3. Always justify health assessments with specific wallet activity or token data.
+4. Present risks clearly so the user can act on them.
 
 ### Response format:
-Always return:
-- Wallet Address
-- SOL Balance
-- Top Tokens
-- Recent Activity Summary
-- Health Status
-"""
+Always provide analysis in a structured and easy-to-read format, like:
 
-📌 Step 5. Update Deep Research Agent Profiles
+- **Wallet Address:** <address>
+- **Health Score:** <summary>
+- **Positive Indicators:**
+  - Point 1
+  - Point 2
+- **Risk Indicators:**
+  - Point 1
+  - Point 2
+- **Notable Holdings & Liquidity:**
+  - Token A – $X value
+  - Token B – $Y value
+- **Recommendations:**
+  - Recommendation 1
+  - Recommendation 2
+"""
+```
+
+
+
+## 📌 Step 5. Update Deep Research Agent Profiles
 
 Edit:
 ROMA/src/sentientresearchagent/hierarchical_agent_framework/agent_configs/profiles/deep_research_agent.yaml
 
+```
 Replace:
 
 executor_adapter_names:
@@ -121,16 +175,19 @@ executor_adapter_names:
 with:
 
 executor_adapter_names:
-  WALLET_HEALTH: "WalletHealthExecutor"
+  SEARCH: "WalletHealthExecutor"
 
-📌 Step 6. Compose Docker
+```
 
-Rebuild and restart the containers:
 
+## 📌 Step 6. Compose Docker
+
+```
 docker compose down
 docker compose up -d --build
+```
 
-📌 Step 7. Notes
+## 📌 Step 7. Notes
 
 ✅ Ensure both HELIUS_API_KEY and SOLSCAN_API_KEY are valid.
 
@@ -139,3 +196,5 @@ docker compose up -d --build
 ✅ Extend WalletHealthAdapter.run() to fetch real data instead of placeholders.
 
 ⚠️ Helius free tier may have rate limits → consider retries or upgrading.
+⚠️ Helius free tier may have rate limits → consider retries or upgrading.
+Helius free tier has API rate limits → add retries or upgrade if needed.
